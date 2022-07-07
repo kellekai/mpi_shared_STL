@@ -1,0 +1,71 @@
+#include <mpi.h>
+#include "ContainerRDMA.h"
+#include <map>
+
+const MPI_Aint SIZE = 1024*256;
+
+int main() {
+  MPI_Init(NULL,NULL);
+  int rank, size;
+  MPI_Comm_size(MPI_COMM_WORLD, &size);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+  std::map<int,int> test_map;
+  std::vector<double> test_vec;
+
+  ContainerRDMA< std::map<int,int> > cont_map( SIZE, sizeof(std::map<int,int>), MPI_COMM_WORLD );
+  cont_map.create();
+  
+  ContainerRDMA< std::vector<double> > cont_vec( SIZE, sizeof(std::vector<double>), MPI_COMM_WORLD );
+  cont_vec.create();
+  
+  test_vec.resize(SIZE);
+  if( rank == 0 ) {
+    for(int i = 0; i<size; i++) {
+      test_vec[i] = 100 * i;
+      test_map[i] = 100 * i;
+    }  
+    cont_map.put(test_map);
+    cont_vec.put(test_vec);
+  } else {
+    for(int i = 0; i<size; i++) {
+      test_vec[i] = -1;
+      test_map[i] = -1;
+    }  
+  }
+  
+  if( rank != 0 ) {
+    std::cout << "map["<<rank<<"]: " << test_map[rank] << std::endl;
+    std::cout << "vec["<<rank<<"]: " << test_vec[rank] << std::endl;
+  }
+  
+  if( rank == 0 ) {
+    for(int i = 0; i<size; i++) {
+      test_vec[i] = 100 * i;
+      test_map[i] = 100 * i;
+    }  
+    cont_map.put(test_map);
+    cont_vec.put(test_vec);
+  }
+
+  MPI_Barrier(MPI_COMM_WORLD);
+  
+  try {
+    test_map = cont_map.get();
+    test_vec = cont_vec.get();
+  } catch ( ... ) {
+    std::cout << "exeption caught" << std::endl;
+  }
+  
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  if( rank != 0 ) {
+    std::cout << "map["<<rank<<"]: " << test_map[rank] << std::endl;
+    std::cout << "vec["<<rank<<"]: " << test_vec[rank] << std::endl;
+  }
+  cont_map.destroy();
+
+  MPI_Finalize();
+  return 0;
+}
+
